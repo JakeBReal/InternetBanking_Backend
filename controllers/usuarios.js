@@ -8,8 +8,7 @@ const crearUsuario = async (req, res) => {
         await client.query('BEGIN');
         
         
-        const { nombre, cedula, correo, contrasena, tipo_cuenta, numero_cuenta, monto_inicial = 0 } = req.body;
-        
+        const { nombre, cedula, correo, contrasena } = req.body;
         // Crear el usuario
         const usuarioResult = await client.query(
             'INSERT INTO usuarios (nombre, cedula, correo, contrasena) VALUES ($1, $2, $3, $4) RETURNING *',
@@ -19,12 +18,12 @@ const crearUsuario = async (req, res) => {
         const nuevoUsuario = usuarioResult.rows[0];
         
         // Generar número de cuenta aleatorio de 11 dígitos si no se proporciona uno
-        const numeroCuenta = numero_cuenta || Math.floor(10000000000 + Math.random() * 90000000000).toString();
+        const numeroCuenta = Math.floor(10000000000 + Math.random() * 90000000000).toString();
         
         // Crear la cuenta asociada al usuario
         const cuentaResult = await client.query(
             'INSERT INTO cuentas (numero_cuenta, tipo_cuenta, monto,  id_usuario) VALUES ($1, $2, $3, $4) RETURNING *',
-            [numeroCuenta, tipo_cuenta || '1', 50000, nuevoUsuario.id]
+            [numeroCuenta, '1', 50000, nuevoUsuario.id]
         );
         
         await client.query('COMMIT');

@@ -56,8 +56,8 @@ app.get('/api/cuentas/:id', cuentasController.obtenerTodasCuentas);
 app.post('/api/cuentas/transaccion/:id', cuentasController.realizarTransaccion);
 
 // Rutas de servicios
-app.post('/api/servicios', serviciosController.crearPagoServicio);
-app.get('/api/servicios', serviciosController.obtenerPagosServicios);
+app.post('/api/servicios/:id', serviciosController.crearPagoServicio);
+app.get('/api/servicios/:id', serviciosController.obtenerPagosServicios);
 app.get('/api/servicios/cuenta/:cuenta_pago', serviciosController.obtenerPagosPorCuenta);
 
 // Rutas de depósitos

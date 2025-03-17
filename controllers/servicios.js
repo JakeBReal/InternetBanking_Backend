@@ -54,6 +54,8 @@ const crearPagoServicio = async (req, res) => {
         });
         
     } catch (error) {
+        console.log(error);
+        
         await client.query('ROLLBACK');
         res.status(500).json({ error: error.message });
     } finally {
