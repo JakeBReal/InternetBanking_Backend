@@ -1,4 +1,5 @@
 const pool = require('../db');
+const transporter = require('../config/email');
 
 // Obtener montos de cuenta (corriente y ahorro)
 const obtenerMontosCuenta = async (req, res) => {
@@ -42,6 +43,7 @@ const realizarTransaccion = async (req, res) => {
         await client.query('BEGIN');
         const { id } = req.params;
         const { cuenta_origen, cuenta_destino, monto, concepto } = req.body;
+        
         // Verificar saldo disponible en la cuenta origen
         const cuentaOrigenResult = await client.query(
             'SELECT monto FROM cuentas WHERE numero_cuenta = $1 FOR UPDATE',
@@ -73,12 +75,49 @@ const realizarTransaccion = async (req, res) => {
         // Registrar la transacción
         const fecha = new Date();
         await client.query(
-            'INSERT INTO transacciones (cuenta_origen, cuenta_destino, monto, concepto, fecha,id_usuario) VALUES ($1, $2, $3, $4, $5, $6)',
+            'INSERT INTO transacciones (cuenta_origen, cuenta_destino, monto, concepto, fecha, id_usuario) VALUES ($1, $2, $3, $4, $5, $6)',
             [cuenta_origen, cuenta_destino, monto, concepto, fecha, id]
         );
         
-        await client.query('COMMIT');
+        // Obtener el correo del usuario
+        const usuarioResult = await client.query(
+            'SELECT correo FROM usuarios WHERE id = $1',
+            [id]
+        );
         
+        if (usuarioResult.rows.length > 0) {
+            const correoUsuario = usuarioResult.rows[0].correo;
+            
+            // Enviar correo electrónico
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: correoUsuario,
+                subject: 'Confirmación de Transferencia',
+                html: `
+                    <h2>Transferencia Realizada</h2>
+                    <p>Se ha realizado una transferencia con los siguientes detalles:</p>
+                    <ul>
+                        <li><strong>Cuenta Origen:</strong> ${cuenta_origen}</li>
+                        <li><strong>Cuenta Destino:</strong> ${cuenta_destino}</li>
+                        <li><strong>Monto Transferido:</strong> $${monto}</li>
+                        <li><strong>Concepto:</strong> ${concepto}</li>
+                        <li><strong>Fecha:</strong> ${fecha.toLocaleString()}</li>
+                    </ul>
+                    <p>Saldo anterior: $${saldoDisponible}</p>
+                    <p>Nuevo saldo: $${(saldoDisponible - monto)}</p>
+                    <p>Gracias por usar nuestros servicios.</p>
+                `
+            };
+            
+            try {
+                await transporter.sendMail(mailOptions);
+            } catch (emailError) {
+                console.error('Error al enviar el correo:', emailError);
+                // No hacemos rollback si falla el envío del correo
+            }
+        }
+        
+        await client.query('COMMIT');
         res.json({
             message: 'Transacción realizada con éxito',
             saldoAnterior: saldoDisponible,

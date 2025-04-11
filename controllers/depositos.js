@@ -1,5 +1,6 @@
 const e = require('express');
 const pool = require('../db');
+const transporter = require('../config/email');
 
 // Crear un depósito y actualizar saldo
 const crearDeposito = async (req, res) => {
@@ -41,13 +42,51 @@ const crearDeposito = async (req, res) => {
             [numero_cuenta]
         );
         
+        // Obtener el correo del usuario
+        const usuarioResult = await client.query(
+            'SELECT correo FROM usuarios WHERE id = $1',
+            [id]
+        );
+        
+        if (usuarioResult.rows.length > 0) {
+            const correoUsuario = usuarioResult.rows[0].correo;
+            
+            // Enviar correo electrónico
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: correoUsuario,
+                subject: 'Confirmación de Depósito',
+                html: `
+                    <h2>Depósito Realizado</h2>
+                    <p>Se ha realizado un depósito con los siguientes detalles:</p>
+                    <ul>
+                        <li><strong>Número de Cuenta:</strong> ${numero_cuenta}</li>
+                        <li><strong>Monto Depositado:</strong> $${monto}</li>
+                        <li><strong>Referencia:</strong> ${referencia}</li>
+                        <li><strong>Concepto:</strong> ${concepto}</li>
+                        <li><strong>Fecha:</strong> ${fecha.toLocaleString()}</li>
+                    </ul>
+                    <p>Saldo anterior: $${cuentaResult.rows[0].monto}</p>
+                    <p>Nuevo saldo: $${saldoActualizadoResult.rows[0].monto}</p>
+                    <p>Gracias por usar nuestros servicios.</p>
+                `
+            };
+            
+            try {
+                await transporter.sendMail(mailOptions);
+            } catch (emailError) {
+                console.error('Error al enviar el correo:', emailError);
+                // No hacemos rollback si falla el envío del correo
+            }
+        }
+        
         await client.query('COMMIT');
         
         res.status(201).json({
             message: 'Depósito realizado con éxito',
             deposito: depositoResult.rows[0],
-            saldo_anterior: cuentaResult.rows[0].monto_corriente,
-            saldo_nuevo: saldoActualizadoResult.rows[0].monto_corriente
+            saldo_anterior: cuentaResult.rows[0].monto,
+            saldo_nuevo: saldoActualizadoResult.rows[0].monto
         });
         
     } catch (error) {

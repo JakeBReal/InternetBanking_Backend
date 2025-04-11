@@ -1,4 +1,5 @@
 const pool = require('../db');
+const transporter = require('../config/email');
 
 // Crear pago de servicio
 const crearPagoServicio = async (req, res) => {
@@ -44,6 +45,42 @@ const crearPagoServicio = async (req, res) => {
             [tipo_de_impuesto, numero_referencia, monto, cuenta_pago, fecha, id]
         );
         
+        // Obtener el correo del usuario
+        const usuarioResult = await client.query(
+            'SELECT correo FROM usuarios WHERE id = $1',
+            [id]
+        );
+            
+        if (usuarioResult.rows.length > 0) {
+            const correoUsuario = usuarioResult.rows[0].correo;
+             
+            // Enviar correo electrónico
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: correoUsuario,
+                subject: 'Confirmación de Pago de Servicio',
+                html: `
+                    <h2>Pago de Servicio Realizado</h2>
+                    <p>Se ha realizado un pago de servicio con los siguientes detalles:</p>
+                    <ul>
+                        <li><strong>Servicio:</strong> ${tipo_de_impuesto}</li>
+                        <li><strong>Número de Referencia:</strong> ${numero_referencia}</li>
+                        <li><strong>Monto:</strong> $${monto}</li>
+                        <li><strong>Cuenta:</strong> ${cuenta_pago}</li>
+                        <li><strong>Fecha:</strong> ${fecha}</li>
+                    </ul>
+                    <p>Saldo anterior: $${saldoDisponible}</p>
+                    <p>Nuevo saldo: $${(saldoDisponible - monto)}</p>
+                    <p>Gracias por usar nuestros servicios.</p>
+                `
+            };
+            
+            try {
+               await transporter.sendMail(mailOptions);
+            } catch (emailError) {
+            }
+        }
+        
         await client.query('COMMIT');
         
         res.status(201).json({
@@ -55,7 +92,6 @@ const crearPagoServicio = async (req, res) => {
         
     } catch (error) {
         console.log(error);
-        
         await client.query('ROLLBACK');
         res.status(500).json({ error: error.message });
     } finally {
